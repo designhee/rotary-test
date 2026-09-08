@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>박스 전개도 PDF 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#1c1a17;
+    --paper:#f6f3ec;
+    --line:#d8d2c4;
+    --accent:#d18e3d;
+    --accent-dark:#a86a25;
+    --red:#c23b2e;
+    --panel:#ffffff;
+    --mono: "IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+    --sans: "IBM Plex Sans","Pretendard","Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:var(--sans);
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0)) ,
+      var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .wrap{
+    max-width:1180px;
+    margin:0 auto;
+    padding:28px 20px 60px;
+  }
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:16px;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:14px;
+    margin-bottom:22px;
+    flex-wrap:wrap;
+  }
+  header .title-block h1{
+    font-size:22px;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+  header .title-block p{
+    margin:4px 0 0;
+    font-size:13px;
+    color:#6b6357;
+    font-family:var(--mono);
+  }
+  header .badge{
+    font-family:var(--mono);
+    font-size:11px;
+    color:#fff;
+    background:var(--ink);
+    padding:5px 10px;
+    border-radius:2px;
+    white-space:nowrap;
+  }
+  .layout{
+    display:grid;
+    grid-template-columns:300px 1fr;
+    gap:20px;
+  }
+  @media (max-width:860px){
+    .layout{grid-template-columns:1fr;}
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:3px;
+  }
+  .form-panel{
+    padding:20px;
+    align-self:start;
+    position:sticky;
+    top:20px;
+  }
+  .field-group{
+    margin-bottom:14px;
+  }
+  .field-row{
+    display:grid;
+    grid-template-columns:1fr 90px;
+    gap:10px;
+    align-items:center;
+    margin-bottom:10px;
+  }
+  .field-row label{
+    font-size:14px;
+    font-weight:600;
+  }
+  .field-row .hint{
+    display:block;
+    font-size:11px;
+    font-weight:400;
+    color:#8a8172;
+    font-family:var(--mono);
+    margin-top:2px;
+  }
+  .field-row input[type=number]{
+    width:100%;
+    padding:8px 9px;
+    border:1px solid #c9c2b2;
+    border-radius:2px;
+    font-family:var(--mono);
+    font-size:14px;
+    text-align:right;
+    background:#fffdf9;
+    color:var(--ink);
+  }
+  .field-row input[type=number]:focus{
+    outline:2px solid var(--accent);
+    outline-offset:1px;
+    border-color:var(--accent);
+  }
+  .fixed-value{
+    width:100%;
+    padding:8px 9px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    font-family:var(--mono);
+    font-size:14px;
+    text-align:right;
+    background:#f1ede3;
+    color:#6b6357;
+  }
+
+  .field-row select{
+    width:100%;
+    padding:8px 9px;
+    border:1px solid #c9c2b2;
+    border-radius:2px;
+    font-family:var(--sans);
+    font-size:13px;
+    background:#fffdf9;
+    color:var(--ink);
+  }
+  .field-row select:focus{
+    outline:2px solid var(--accent);
+    outline-offset:1px;
+    border-color:var(--accent);
+  }
+  .auto-note{
+    font-size:11px;
+    color:#8a8172;
+    font-family:var(--mono);
+    margin:-4px 0 12px;
+  }
+  .auto-note.active{color:var(--accent-dark);}
+  .divider{
+    height:1px;
+    background:var(--line);
+    margin:16px 0;
+  }
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+    font-size:13px;
+  }
+  .check-row input{width:16px;height:16px;accent-color:var(--accent-dark);}
+  .filename-preview{
+    font-family:var(--mono);
+    font-size:12px;
+    color:#6b6357;
+    background:#f1ede3;
+    border:1px dashed #c9c2b2;
+    padding:8px 10px;
+    border-radius:2px;
+    margin:12px 0 16px;
+    word-break:break-all;
+  }
+  .filename-preview b{color:var(--ink);}
+  button.generate{
+    width:100%;
+    padding:12px;
+    background:var(--ink);
+    color:#fff;
+    border:none;
+    border-radius:2px;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    letter-spacing:0.02em;
+    transition:background 0.15s ease;
+  }
+  button.generate:hover{background:#000;}
+  button.generate:active{transform:translateY(1px);}
+  .error-msg{
+    margin-top:10px;
+    font-size:12.5px;
+    color:var(--red);
+    font-family:var(--mono);
+    display:none;
+  }
+  .success-msg{
+    margin-top:10px;
+    font-size:12.5px;
+    color:#3d7a3d;
+    font-family:var(--mono);
+    display:none;
+  }
+  .preview-panel{
+    padding:18px 18px 12px;
+    display:flex;
+    flex-direction:column;
+    min-height:520px;
+  }
+  .preview-panel .preview-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  .preview-panel .preview-head span#dim_readout{
+    font-family:var(--mono);
+    font-size:11px;
+    color:#8a8172;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .view-tabs{
+    display:flex;
+    gap:4px;
+  }
+  .tab-btn{
+    font-family:var(--mono);
+    font-size:11.5px;
+    letter-spacing:0.02em;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    background:#f1ede3;
+    color:#6b6357;
+    border-radius:2px;
+    cursor:pointer;
+  }
+  .tab-btn.active{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:#fff;
+  }
+  .tab-btn:hover:not(.active){
+    border-color:var(--accent-dark);
+    color:var(--accent-dark);
+  }
+  .canvas-holder{
+    flex:1;
+    background:
+      repeating-linear-gradient(0deg, #fbfaf6 0 24px, #f4f1e9 24px 25px),
+      repeating-linear-gradient(90deg, #fbfaf6 0 24px, #f4f1e9 24px 25px);
+    border:1px solid var(--line);
+    border-radius:2px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:auto;
+    padding:10px;
+  }
+  svg#preview{
+    max-width:100%;
+    height:auto;
+    display:block;
+  }
+  .spec-strip{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid var(--line);
+    font-family:var(--mono);
+    font-size:12px;
+    color:#5a5346;
+  }
+  .spec-strip div{
+    background:#f1ede3;
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:4px 9px;
+    white-space:nowrap;
+  }
+  .spec-strip div b{color:var(--ink); margin-right:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>박스 전개도 PDF 생성기</h1>
+      <p>rotary box unfold drawing tool — 웹 버전</p>
+    </div>
+    <div class="badge">ROTARY DIE-CUT · WEB</div>
+  </header>
+
+  <div class="layout">
+
+    <div class="panel form-panel">
+      <div class="field-group">
+        <div class="field-row">
+          <label>미미
+            <span class="hint">고정값 (fixed)</span>
+          </label>
+          <div class="fixed-value" id="mimi_display">35 mm</div>
+        </div>
+        <div class="field-row">
+          <label>가로
+            <span class="hint">length (mm)</span>
+          </label>
+          <input type="number" id="in_jang" value="300" min="1" step="1">
+        </div>
+        <div class="field-row">
+          <label>세로
+            <span class="hint">width (mm)</span>
+          </label>
+          <input type="number" id="in_pok" value="200" min="1" step="1">
+        </div>
+        <div class="field-row">
+          <label>높이
+            <span class="hint">height (mm)</span>
+          </label>
+          <input type="number" id="in_go" value="150" min="1" step="1">
+        </div>
+        <div class="field-row">
+          <label>박스 종류
+            <span class="hint">box type</span>
+          </label>
+          <select id="sel_boxtype">
+            <option value="일반박스">일반박스</option>
+            <option value="보냉박스">보냉박스</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label>골 종류
+            <span class="hint">flute type</span>
+          </label>
+          <select id="sel_flute">
+            <option value="BA골">BA골</option>
+            <option value="A골">A골</option>
+            <option value="B골">B골</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label>날개여유
+            <span class="hint">flap margin (mm)</span>
+          </label>
+          <input type="number" id="in_flap" value="4" min="0" step="1">
+        </div>
+        <div class="auto-note" id="flap_auto_note">박스 종류·골 종류 선택 시 날개여유가 자동으로 입력됩니다 (직접 수정도 가능)</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="check-row">
+        <input type="checkbox" id="chk_open">
+        <label for="chk_open">생성 후 PDF 바로 열기</label>
+      </div>
+
+      <div class="filename-preview">
+        저장 파일명: <b id="filename_preview">box_300x200x150.pdf</b>
+      </div>
+
+      <button class="generate" id="btn_generate">PDF 생성</button>
+      <div class="error-msg" id="err_msg"></div>
+      <div class="success-msg" id="ok_msg"></div>
+    </div>
+
+    <div class="panel preview-panel">
+      <div class="preview-head">
+        <div class="view-tabs">
+          <button class="tab-btn active" id="tab_flat" type="button">전개도</button>
+        </div>
+        <span id="dim_readout"></span>
+      </div>
+      <div class="canvas-holder">
+        <svg id="preview" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="spec-strip" id="spec_strip"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function el(name, attrs = {}){
+  const n = document.createElementNS(SVG_NS, name);
+  for(const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+
+// Core geometry, ported 1:1 from the original desktop generator's
+// generate_box_drawing() logic (5-panel rotary die-cut unfold: mimi / jang / pok / jang / pok,
+// with top+bottom side flaps sized by pok/2 + flap_margin/2).
+function computeLayout(mimi, jang, pok, go, flap){
+  const mainH = go;
+  const sideH = Math.floor(pok/2 + flap/2);
+
+  const rects = [
+    {x:0,                         width:mimi, height:mainH},
+    {x:mimi,                      width:jang, height:mainH},
+    {x:mimi+jang,                 width:pok,  height:mainH},
+    {x:mimi+jang+pok,             width:jang, height:mainH},
+    {x:mimi+jang+pok+jang,        width:pok,  height:mainH},
+  ];
+
+  const totalWidth = 2*(jang+pok) + mimi;
+  const totalVertical = mainH + 2*sideH;
+
+  return {mainH, sideH, rects, totalWidth, totalVertical};
+}
+
+function buildDrawing(mimi, jang, pok, go, flap){
+  const {mainH, sideH, rects, totalWidth, totalVertical} = computeLayout(mimi, jang, pok, go, flap);
+
+  // collected primitives in DATA space (matplotlib-style: y-up, origin at base of main panel row)
+  const boxes = [];   // {x,y,w,h} lower-left origin, y-up
+  const labels = [];  // {x,y,text,ha,va,color,size}
+  const arrows = [];  // {x1,y1,x2,y2,color}
+
+  rects.forEach((rect, i) => {
+    const {x, width:w, height:h} = rect;
+    boxes.push({x, y:0, w, h});
+
+    if (i === 0){
+      labels.push({x:x+w/2, y:h+5, text:`${Math.round(w)}mm`, ha:'center', va:'bottom'});
+    }
+    if (i >= 1){
+      boxes.push({x, y:h, w, h:sideH});          // top flap
+      boxes.push({x, y:-sideH, w, h:sideH});     // bottom flap
+      labels.push({x:x+w/2, y:h+sideH+5, text:`${Math.round(w)}mm`, ha:'center', va:'bottom'});
+    }
+    if (i === 4){
+      labels.push({x:x+w+5, y:h+sideH/2, text:`${Math.round(sideH)}mm`, ha:'left', va:'middle'});
+    }
+  });
+
+  const last = rects[rects.length-1];
+  const x5 = last.x, w5 = last.width;
+  const xRight = x5 + w5;
+  const topY = mainH + sideH;
+  const bottomY = -sideH;
+  const safeMargin = 100;
+
+  arrows.push({x1:xRight+safeMargin, y1:topY, x2:xRight+safeMargin, y2:bottomY, color:'red'});
+  labels.push({x:xRight+safeMargin+10, y:(topY+bottomY)/2, text:`${Math.round(totalVertical)}mm`, ha:'left', va:'middle', color:'red', bold:true});
+
+  labels.push({x:x5+w5+5, y:mainH/2, text:`${Math.round(mainH)}mm`, ha:'left', va:'middle'});
+  labels.push({x:x5+w5+5, y:-sideH/2, text:`${Math.round(sideH)}mm`, ha:'left', va:'middle'});
+
+  const firstX = rects[0].x;
+  const lastX = last.x + last.width;
+  const centerX = (firstX+lastX)/2;
+  const lineY = mainH + sideH + 50;
+
+  arrows.push({x1:firstX, y1:lineY, x2:lastX, y2:lineY, color:'red'});
+  labels.push({x:centerX, y:lineY+5, text:`${Math.round(totalWidth)}mm`, ha:'center', va:'bottom', color:'red', bold:true});
+
+  const xlim = [-50, lastX+600];
+  const ylim = [-sideH-100, mainH+sideH+200];
+
+  return {boxes, labels, arrows, xlim, ylim, totalWidth, totalVertical, mainH, sideH};
+}
+
+const MIMI_FIXED = 35; // mm, fixed per spec
+
+function render(){
+  const mimi = MIMI_FIXED;
+  const jang = Number(document.getElementById('in_jang').value);
+  const pok  = Number(document.getElementById('in_pok').value);
+  const go   = Number(document.getElementById('in_go').value);
+  const flap = Number(document.getElementById('in_flap').value);
+
+  document.getElementById('filename_preview').textContent = `box_${jang}x${pok}x${go}.pdf`;
+
+  const errEl = document.getElementById('err_msg');
+  if ([mimi,jang,pok,go,flap].some(v => !Number.isFinite(v)) ||
+      jang <= 0 || pok <= 0 || go <= 0 || mimi < 0 || flap < 0){
+    errEl.style.display = 'block';
+    errEl.textContent = '입력 오류: 모든 값을 올바른 숫자(mm)로 입력해 주세요.';
+    document.getElementById('preview').innerHTML = '';
+    document.getElementById('spec_strip').innerHTML = '';
+    document.getElementById('dim_readout').textContent = '';
+    return null;
+  }
+  errEl.style.display = 'none';
+  document.getElementById('ok_msg').style.display = 'none';
+
+  const d = buildDrawing(mimi, jang, pok, go, flap);
+  drawSvg(d);
+
+  document.getElementById('dim_readout').textContent =
+    `전체 ${d.totalWidth} x ${d.totalVertical} mm`;
+
+  document.getElementById('spec_strip').innerHTML = `
+    <div><b>미미</b> ${mimi}mm</div>
+    <div><b>가로</b> ${jang}mm</div>
+    <div><b>세로</b> ${pok}mm</div>
+    <div><b>높이</b> ${go}mm</div>
+    <div><b>날개여유</b> ${flap}mm</div>
+    <div><b>전개 전체폭</b> ${d.totalWidth}mm</div>
+    <div><b>전개 전체높이</b> ${d.totalVertical}mm</div>
+  `;
+
+  return {mimi, jang, pok, go, flap, d};
+}
+
+// Mirrors the original matplotlib figure: figsize=(26,16) inches, tight_layout.
+// Font size (16pt) and line widths are fixed in points, not in data units, so their
+// apparent size relative to the drawing depends on how much of the figure the data
+// range fills. Reproduce that so proportions match the original app at any box size.
+const FIG_W_IN = 25.2, FIG_H_IN = 15.3; // approx usable area inside tight_layout margins
+function styleScale(dataW, dataH){
+  const inPerUnit = Math.min(FIG_W_IN/dataW, FIG_H_IN/dataH); // inches per data unit
+  const ptToUnits = (pt) => (pt/72) / inPerUnit;
+  return {
+    inPerUnit,
+    fontSize: ptToUnits(16),
+    edgeWidth: ptToUnits(1.0),
+    arrowWidth: ptToUnits(2.0)
+  };
+}
+
+function drawSvg(d){
+  const svg = document.getElementById('preview');
+  svg.innerHTML = '';
+
+  const [xmin, xmax] = d.xlim;
+  const [ymin, ymax] = d.ylim;
+  const w = xmax - xmin;
+  const h = ymax - ymin;
+
+  // y-flip: svg_y = -data_y ; viewBox top-left = (xmin, -ymax)
+  svg.setAttribute('viewBox', `${xmin} ${-ymax} ${w} ${h}`);
+  svg.setAttribute('width', '900');
+
+  const style = styleScale(w, h);
+  const fontSize = style.fontSize;
+  d._style = style;
+
+  d.boxes.forEach(b => {
+    svg.appendChild(el('rect', {
+      x:b.x, y:-(b.y+b.h), width:b.w, height:b.h,
+      fill:'#d18e3d', stroke:'#1c1a17', 'stroke-width':style.edgeWidth
+    }));
+  });
+
+  d.arrows.forEach(a => {
+    const line = el('line', {
+      x1:a.x1, y1:-a.y1, x2:a.x2, y2:-a.y2,
+      stroke:a.color, 'stroke-width': style.arrowWidth,
+      'marker-start':'url(#arrowhead)', 'marker-end':'url(#arrowhead)'
+    });
+    svg.appendChild(line);
+  });
+
+  // arrowhead marker definition
+  const defs = el('defs', {});
+  const marker = el('marker', {
+    id:'arrowhead', markerWidth:'4', markerHeight:'4', refX:'2', refY:'2',
+    orient:'auto', markerUnits:'strokeWidth'
+  });
+  marker.appendChild(el('path', {d:'M0,0 L4,2 L0,4 L1.2,2 Z', fill:'red'}));
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  d.labels.forEach(t => {
+    const anchor = t.ha === 'center' ? 'middle' : (t.ha === 'left' ? 'start' : 'end');
+    let dy = 0;
+    if (t.va === 'bottom') dy = -fontSize*0.15;
+    else if (t.va === 'middle') dy = fontSize*0.33;
+    const text = el('text', {
+      x:t.x, y:-t.y + dy,
+      'text-anchor':anchor,
+      'font-family':'IBM Plex Mono, monospace',
+      'font-size':fontSize,
+      'font-weight': t.bold ? '700' : '500',
+      fill: t.color || '#1c1a17'
+    });
+    text.textContent = t.text;
+    svg.appendChild(text);
+  });
+}
+
+function getDesktopSaveNote(){
+  return "브라우저의 기본 다운로드 폴더에 저장됩니다.";
+}
+
+// Isometric render of the assembled (folded) box. mimi/flap only affect the flat
+// die-cut pattern and glue overlap — the finished box's outer size is simply
+// 가로(W) x 세로(D) x 높이(H), so that's all this view needs.
+function generatePdf(){
+  const state = render();
+  if (!state) return;
+  const {jang, pok, go, d} = state;
+
+  const okEl = document.getElementById('ok_msg');
+  const errEl = document.getElementById('err_msg');
+  okEl.style.display = 'none';
+  errEl.style.display = 'none';
+
+  try {
+    const { jsPDF } = window.jspdf;
+
+    const [xmin, xmax] = d.xlim;
+    const [ymin, ymax] = d.ylim;
+    const dataW = xmax - xmin;
+    const dataH = ymax - ymin;
+    const style = styleScale(dataW, dataH);
+
+    // Scale data (mm-ish schematic units) down to a sensible printable page,
+    // keeping aspect ratio equal (matplotlib's set_aspect('equal') equivalent).
+    const targetMaxDim = 400; // mm, roughly A3-scale long edge
+    const scale = targetMaxDim / Math.max(dataW, dataH);
+    const margin = 15; // mm
+    const pageW = dataW*scale + margin*2;
+    const pageH = dataH*scale + margin*2;
+
+    const doc = new jsPDF({
+      orientation: pageW >= pageH ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: [pageW, pageH]
+    });
+
+    const toPdfX = (dx) => margin + (dx - xmin) * scale;
+    const toPdfY = (dy) => margin + (ymax - dy) * scale; // y-flip
+
+    // boxes
+    d.boxes.forEach(b => {
+      const px = toPdfX(b.x);
+      const py = toPdfY(b.y + b.h);
+      const pw = b.w * scale;
+      const ph = b.h * scale;
+      doc.setDrawColor(28,26,23);
+      doc.setFillColor(209,142,61);
+      doc.setLineWidth(style.edgeWidth * scale);
+      doc.rect(px, py, pw, ph, 'FD');
+    });
+
+    // arrows (as lines with simple manual arrowheads)
+    doc.setDrawColor(194,59,46);
+    doc.setLineWidth(style.arrowWidth * scale);
+    d.arrows.forEach(a => {
+      const x1 = toPdfX(a.x1), y1 = toPdfY(a.y1);
+      const x2 = toPdfX(a.x2), y2 = toPdfY(a.y2);
+      doc.line(x1, y1, x2, y2);
+      drawArrowHead(doc, x2, y2, x1, y1);
+      drawArrowHead(doc, x1, y1, x2, y2);
+    });
+
+    // labels
+    d.labels.forEach(t => {
+      const px = toPdfX(t.x);
+      const py = toPdfY(t.y);
+      const sizeMm = style.fontSize * scale;
+      doc.setFont('helvetica', t.bold ? 'bold' : 'normal');
+      doc.setFontSize(sizeMm * (72/25.4));
+      doc.setTextColor(...(t.color === 'red' ? [194,59,46] : [28,26,23]));
+      let align = 'left';
+      if (t.ha === 'center') align = 'center';
+      else if (t.ha === 'right') align = 'right';
+      let by = py;
+      if (t.va === 'middle') by = py + sizeMm*0.35;
+      else if (t.va === 'bottom') by = py;
+      doc.text(t.text, px, by, {align});
+    });
+
+    const fileName = `box_${jang}x${pok}x${go}.pdf`;
+    doc.save(fileName);
+
+    okEl.textContent = `완료 — PDF로 저장되었습니다: ${fileName} (${getDesktopSaveNote()})`;
+    okEl.style.display = 'block';
+
+    if (document.getElementById('chk_open').checked){
+      const blobUrl = doc.output('bloburl');
+      const opened = window.open(blobUrl, '_blank');
+      if (!opened){
+        okEl.textContent += ' (팝업이 차단되어 PDF 새 창을 열지 못했습니다. 브라우저의 팝업 허용 후 다시 시도해 주세요.)';
+      }
+    }
+  } catch (e){
+    errEl.textContent = '오류: ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function drawArrowHead(doc, tipX, tipY, fromX, fromY){
+  const angle = Math.atan2(tipY-fromY, tipX-fromX);
+  const len = 2.4, spread = 0.45;
+  const x1 = tipX - len*Math.cos(angle-spread);
+  const y1 = tipY - len*Math.sin(angle-spread);
+  const x2 = tipX - len*Math.cos(angle+spread);
+  const y2 = tipY - len*Math.sin(angle+spread);
+  doc.setFillColor(194,59,46);
+  doc.triangle(tipX, tipY, x1, y1, x2, y2, 'F');
+}
+
+const FLAP_TABLE = {
+  '일반박스': { 'BA골': 4, 'A골': 2, 'B골': 2 },
+  '보냉박스': { 'BA골': 8, 'A골': 6, 'B골': 6 }
+};
+
+function applyFlapAuto(){
+  const boxType = document.getElementById('sel_boxtype').value;
+  const flute = document.getElementById('sel_flute').value;
+  const val = FLAP_TABLE[boxType][flute];
+  const flapInput = document.getElementById('in_flap');
+  flapInput.value = val;
+  const note = document.getElementById('flap_auto_note');
+  note.textContent = `${boxType} · ${flute} 기준 날개여유 ${val}mm가 자동 반영되었습니다.`;
+  note.classList.add('active');
+  render();
+}
+
+['in_jang','in_pok','in_go','in_flap'].forEach(id => {
+  document.getElementById(id).addEventListener('input', render);
+});
+document.getElementById('in_flap').addEventListener('input', () => {
+  const note = document.getElementById('flap_auto_note');
+  note.textContent = '날개여유 값을 직접 수정했습니다.';
+  note.classList.remove('active');
+});
+document.getElementById('sel_boxtype').addEventListener('change', applyFlapAuto);
+document.getElementById('sel_flute').addEventListener('change', applyFlapAuto);
+document.getElementById('btn_generate').addEventListener('click', generatePdf);
+
+function init(){
+  applyFlapAuto();
+}
+
+if (document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
